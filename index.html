@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Beauty vs Evildoer</title>
+  <style>
+    /* Reset and basic styles */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: sans-serif; background-color: #f0f0f0; }
+
+    /* Common screen styles */
+    .screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      text-align: center;
+      background-color: #fff;
+      padding: 20px;
+    }
+    
+    /* Game Screen */
+    #game-screen {
+      position: relative;
+      width: 100%;
+      height: 100vh;
+      overflow: hidden;
+      background-color: #e0f7fa;
+    }
+    
+    /* HUD styling */
+    #hud {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      right: 10px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 1.2em;
+      color: #333;
+      z-index: 2;
+    }
+    
+    /* Stop button styling */
+    #stop-button {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 3;
+      padding: 5px 10px;
+      font-size: 1em;
+      cursor: pointer;
+    }
+    
+    /* Game Area for targets */
+    #game-area {
+      position: relative;
+      width: 100%;
+      height: 100%;
+    }
+    
+    /* Target styling */
+    .target {
+      position: absolute;
+      width: 80px;
+      height: 80px;
+      cursor: pointer;
+      transition: transform 0.2s ease-out, opacity 0.2s ease-out;
+    }
+    .hit {
+      transform: scale(1.5);
+      opacity: 0;
+    }
+    
+    /* Score Popup styling */
+    .score-popup {
+      position: absolute;
+      font-size: 1.2em;
+      font-weight: bold;
+      transition: transform 1s ease-out, opacity 1s ease-out;
+      pointer-events: none;
+    }
+    
+    /* Button styling */
+    button {
+      padding: 10px 20px;
+      font-size: 1em;
+      margin-top: 20px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <!-- Start Screen -->
+  <div id="start-screen" class="screen">
+    <h1>Beauty vs Evildoer</h1>
+    <div id="instructions">
+      <p>Tap the "Beauty" to gain +100 points.</p>
+      <p>Avoid the "Evildoer" to prevent -100 points.</p>
+      <p>Reach the score target before time runs out to advance.</p>
+    </div>
+    <button id="start-button">Start Game</button>
+  </div>
+  
+  <!-- Level Complete Screen (shown between levels) -->
+  <div id="level-complete-screen" class="screen" style="display: none;">
+    <h2 id="level-complete-title">Level Complete!</h2>
+    <p>Your Score: <span id="level-score"></span></p>
+    <p>Press the button below to start the next level.</p>
+    <button id="next-level-button">Start Level 2</button>
+  </div>
+  
+  <!-- Game Screen -->
+  <div id="game-screen" style="display: none;">
+    <div id="hud">
+      <span id="score">Score: 0</span>
+      <span id="timer">Time: 30</span>
+      <span id="level">Level: 1</span>
+    </div>
+    <!-- Stop Game Button -->
+    <button id="stop-button">Stop Game</button>
+    <div id="game-area"></div>
+  </div>
+  
+  <!-- Game Over Screen -->
+  <div id="game-over-screen" class="screen" style="display: none;">
+    <h2>Game Over</h2>
+    <p id="final-score"></p>
+    <p id="final-level"></p>
+    <p id="high-score"></p>
+    <button id="restart-button">Restart Game</button>
+  </div>
+  
+  <script>
+    // ------------------------------
+    // Game Variables & Settings
+    // ------------------------------
+    let score = 0;
+    let timeLeft = 30;         // 30 seconds per level
+    let level = 1;
+    let gameTimer;             // Countdown timer
+    let spawnInterval;         // For spawning targets
+    let gameRunning = false;
+    
+    // Constant difficulty parameters
+    const baseSpawnInterval = 1500; // milliseconds between spawns
+    const targetLifetime = 2000;    // milliseconds a target stays on screen
+    
+    // ------------------------------
+    // Sound Effects
+    // ------------------------------
+    // Files are loaded from the "assets" folder.
+    const positiveSound = new Audio('assets/positive.mp3'); // "Beauty" tap sound
+    const negativeSound = new Audio('assets/negative.mp3'); // "Evildoer" tap sound
+    positiveSound.load();
+    negativeSound.load();
+    
+    // ------------------------------
+    // Background Music
+    // ------------------------------
+    // The background music plays during gameplay and loops.
+    const bgMusic = new Audio('assets/bg_music.mp3');
+    bgMusic.loop = true;
+    bgMusic.load();
+    
+    // ------------------------------
+    // DOM Elements
+    // ------------------------------
+    const startScreen = document.getElementById('start-screen');
+    const startButton = document.getElementById('start-button');
+    const gameScreen = document.getElementById('game-screen');
+    const gameArea = document.getElementById('game-area');
+    const hudScore = document.getElementById('score');
+    const hudTimer = document.getElementById('timer');
+    const hudLevel = document.getElementById('level');
+    const stopButton = document.getElementById('stop-button');
+    const levelCompleteScreen = document.getElementById('level-complete-screen');
+    const levelCompleteTitle = document.getElementById('level-complete-title');
+    const levelScoreDisplay = document.getElementById('level-score');
+    const nextLevelButton = document.getElementById('next-level-button');
+    const gameOverScreen = document.getElementById('game-over-screen');
+    const finalScoreText = document.getElementById('final-score');
+    const finalLevelText = document.getElementById('final-level');
+    const highScoreText = document.getElementById('high-score');
+    const restartButton = document.getElementById('restart-button');
+    
+    // ------------------------------
+    // Level Progression & Thresholds
+    // ------------------------------
+    function getScoreThreshold(lvl) {
+      // Example: Level 1: 1000, Level 2: 1500, Level 3: 2000, etc.
+      return 1000 + (lvl - 1) * 500;
+    }
+    
+    // Update HUD display
+    function updateHUD() {
+      hudScore.textContent = "Score: " + score;
+      hudTimer.textContent = "Time: " + timeLeft;
+      hudLevel.textContent = "Level: " + level;
+    }
+    
+    // ------------------------------
+    // Show Score Popup (for +100 / -100)
+    // ------------------------------
+    function showScorePopup(x, y, text, color) {
+      const popup = document.createElement('div');
+      popup.className = 'score-popup';
+      popup.textContent = text;
+      popup.style.left = x + 'px';
+      popup.style.top = y + 'px';
+      popup.style.color = color;
+      gameArea.appendChild(popup);
+      
+      // Animate the popup (move up and fade out)
+      setTimeout(() => {
+        popup.style.transform = 'translateY(-30px)';
+        popup.style.opacity = 0;
+      }, 10);
+      
+      // Remove the popup after the animation completes
+      setTimeout(() => {
+        if (popup.parentElement) {
+          popup.parentElement.removeChild(popup);
+        }
+      }, 1000);
+    }
+    
+    // ------------------------------
+    // Target Spawning & Handling
+    // ------------------------------
+    function spawnTarget() {
+      if (!gameRunning) return;
+      
+      // Calculate positive spawn probability:
+      // Level 1: 70%, Level 2: 60%, Level 3: 50%, Level 4: 40%, Level 5+: 30%
+      let positiveProbability = Math.max(0.3, 0.7 - (level - 1) * 0.1);
+      let isPositive = Math.random() < positiveProbability;
+      let imgSrc = isPositive ? 'assets/positive.png' : 'assets/negative.png';
+      
+      // Create the target element
+      let target = document.createElement('img');
+      target.src = imgSrc;
+      target.classList.add('target');
+      
+      // Set a random position within gameArea boundaries
+      let areaRect = gameArea.getBoundingClientRect();
+      let x = Math.random() * (areaRect.width - 80);
+      let y = Math.random() * (areaRect.height - 80);
+      target.style.left = x + 'px';
+      target.style.top = y + 'px';
+      
+      // Save the position for displaying the score popup
+      let targetX = x;
+      let targetY = y;
+      
+      // Add tap (click) event listener to the target
+      target.addEventListener('click', function() {
+        if (!target.classList.contains('hit')) {
+          target.classList.add('hit');
+          if (isPositive) {
+            score += 100;
+            positiveSound.currentTime = 0;
+            positiveSound.play();
+            showScorePopup(targetX, targetY, "+100", "green");
+          } else {
+            score -= 100;
+            negativeSound.currentTime = 0;
+            negativeSound.play();
+            showScorePopup(targetX, targetY, "-100", "red");
+          }
+          updateHUD();
+          
+          // Remove the target after the "hit" animation
+          setTimeout(() => {
+            if (target.parentElement) {
+              target.parentElement.removeChild(target);
+            }
+          }, 200);
+        }
+      });
+      
+      gameArea.appendChild(target);
+      
+      // Automatically remove the target after its lifetime expires
+      setTimeout(() => {
+        if (target.parentElement) {
+          target.parentElement.removeChild(target);
+        }
+      }, targetLifetime);
+    }
+    
+    // ------------------------------
+    // Timer Function
+    // ------------------------------
+    function startTimer() {
+      gameTimer = setInterval(() => {
+        timeLeft--;
+        updateHUD();
+        if (timeLeft <= 0) {
+          clearInterval(gameTimer);
+          clearInterval(spawnInterval);
+          // When time is up, if the score meets the threshold, show level complete screen; otherwise, end game.
+          if (score >= getScoreThreshold(level)) {
+            endLevel();
+          } else {
+            endGame();
+          }
+        }
+      }, 1000);
+    }
+    
+    // ------------------------------
+    // End Current Level: Show Level Complete Screen
+    // ------------------------------
+    function endLevel() {
+      gameRunning = false;
+      // Clear any remaining targets
+      gameArea.innerHTML = '';
+      
+      // Update the level complete screen's title and score display
+      levelCompleteTitle.textContent = "Level " + level + " Complete!";
+      levelScoreDisplay.textContent = score;
+      nextLevelButton.textContent = "Start Level " + (level + 1);
+      
+      // Hide the game screen and show the level complete screen
+      gameScreen.style.display = 'none';
+      levelCompleteScreen.style.display = 'flex';
+    }
+    
+    // ------------------------------
+    // Start Next Level
+    // ------------------------------
+    function startNextLevel() {
+      // Increment level and reset timer
+      level++;
+      timeLeft = 30;
+      updateHUD();
+      
+      // Hide the level complete screen and show the game screen
+      levelCompleteScreen.style.display = 'none';
+      gameScreen.style.display = 'block';
+      
+      gameRunning = true;
+      spawnInterval = setInterval(spawnTarget, baseSpawnInterval);
+      startTimer();
+    }
+    
+    // ------------------------------
+    // End Game & High Score Handling
+    // ------------------------------
+    function endGame() {
+      gameRunning = false;
+      clearInterval(gameTimer);
+      clearInterval(spawnInterval);
+      gameArea.innerHTML = '';
+      
+      // Pause the background music
+      bgMusic.pause();
+      bgMusic.currentTime = 0;
+      
+      // Retrieve and update high score using localStorage
+      let storedHighScore = localStorage.getItem('highScore') || 0;
+      if (score > storedHighScore) {
+        localStorage.setItem('highScore', score);
+        storedHighScore = score;
+      }
+      
+      // Display final score, level reached, and high score on the Game Over screen
+      finalScoreText.textContent = "Final Score: " + score;
+      finalLevelText.textContent = "Level Reached: " + level;
+      highScoreText.textContent = "High Score: " + storedHighScore;
+      
+      // Transition to the Game Over screen
+      gameScreen.style.display = 'none';
+      levelCompleteScreen.style.display = 'none';
+      startScreen.style.display = 'none';
+      gameOverScreen.style.display = 'flex';
+    }
+    
+    // ------------------------------
+    // Game Start & Restart Functions
+    // ------------------------------
+    function startGame() {
+      // Initialize game variables for Level 1
+      score = 0;
+      timeLeft = 30;
+      level = 1;
+      updateHUD();
+      
+      // Hide other screens and show the Game Screen
+      startScreen.style.display = 'none';
+      levelCompleteScreen.style.display = 'none';
+      gameOverScreen.style.display = 'none';
+      gameScreen.style.display = 'block';
+      
+      // Start the background music
+      bgMusic.currentTime = 0;
+      bgMusic.play();
+      
+      gameRunning = true;
+      spawnInterval = setInterval(spawnTarget, baseSpawnInterval);
+      startTimer();
+    }
+    
+    // ------------------------------
+    // Attach Event Listeners
+    // ------------------------------
+    startButton.addEventListener('click', startGame);
+    restartButton.addEventListener('click', startGame);
+    nextLevelButton.addEventListener('click', startNextLevel);
+    stopButton.addEventListener('click', endGame);
+  </script>
+</body>
+</html>
