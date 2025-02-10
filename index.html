@@ -64,9 +64,8 @@
     /* Target styling */
     .target {
       position: absolute;
-      width: 80px;
-      height: 80px;
       cursor: pointer;
+      /* Width and height will be set dynamically */
       transition: transform 0.2s ease-out, opacity 0.2s ease-out;
     }
     .hit {
@@ -89,6 +88,12 @@
       font-size: 1em;
       margin-top: 20px;
       cursor: pointer;
+    }
+    
+    /* Keyframe animation for dropping targets */
+    @keyframes drop {
+      from { top: 0; }
+      to { top: 100%; }
     }
   </style>
 </head>
@@ -144,14 +149,13 @@
     let spawnInterval;         // For spawning targets
     let gameRunning = false;
     
-    // Constant difficulty parameters
-    const baseSpawnInterval = 1500; // milliseconds between spawns
-    const targetLifetime = 2000;    // milliseconds a target stays on screen
+    // Base parameters
+    const baseSpawnInterval = 1500; // in milliseconds; will decrease with level
+    const baseSize = 80;            // base target size in pixels
     
     // ------------------------------
     // Sound Effects
     // ------------------------------
-    // Files are loaded from the "assets" folder.
     const positiveSound = new Audio('assets/positive.mp3'); // "Beauty" tap sound
     const negativeSound = new Audio('assets/negative.mp3'); // "Evildoer" tap sound
     positiveSound.load();
@@ -160,7 +164,6 @@
     // ------------------------------
     // Background Music
     // ------------------------------
-    // The background music plays during gameplay and loops.
     const bgMusic = new Audio('assets/bg_music.mp3');
     bgMusic.loop = true;
     bgMusic.load();
@@ -233,27 +236,37 @@
     function spawnTarget() {
       if (!gameRunning) return;
       
-      // Calculate positive spawn probability:
-      // Level 1: 70%, Level 2: 60%, Level 3: 50%, Level 4: 40%, Level 5+: 30%
+      // Determine spawn probability for a positive target.
+      // Level 1: 70%, Level 2: 60%, etc. (minimum 30%)
       let positiveProbability = Math.max(0.3, 0.7 - (level - 1) * 0.1);
       let isPositive = Math.random() < positiveProbability;
-      let imgSrc = isPositive ? 'assets/positive.png' : 'assets/negative.png';
       
-      // Create the target element
+      // Randomize target size: scale factor between 0.5 and 1.2 of the base size
+      let scale = 0.5 + Math.random() * 0.7; 
+      let size = baseSize * scale;
+      
+      // Evenly distribute target across the width:
+      let areaRect = gameArea.getBoundingClientRect();
+      let centerX = Math.random() * (areaRect.width - size) + size / 2;
+      let x = centerX - size / 2;
+      
+      // Create the target element (starts at the top)
       let target = document.createElement('img');
+      let imgSrc = isPositive ? 'assets/positive.png' : 'assets/negative.png';
       target.src = imgSrc;
       target.classList.add('target');
-      
-      // Set a random position within gameArea boundaries
-      let areaRect = gameArea.getBoundingClientRect();
-      let x = Math.random() * (areaRect.width - 80);
-      let y = Math.random() * (areaRect.height - 80);
+      target.style.width = size + 'px';
+      target.style.height = size + 'px';
       target.style.left = x + 'px';
-      target.style.top = y + 'px';
+      target.style.top = '0px'; // start at the top
       
-      // Save the position for displaying the score popup
+      // Calculate drop duration (faster as level increases; minimum 1.5 seconds)
+      let dropDuration = Math.max(1.5, 3 - (level - 1) * 0.2);
+      target.style.animation = `drop ${dropDuration}s linear forwards`;
+      
+      // Save initial position for the score popup
       let targetX = x;
-      let targetY = y;
+      let targetY = 0;
       
       // Add tap (click) event listener to the target
       target.addEventListener('click', function() {
@@ -272,7 +285,7 @@
           }
           updateHUD();
           
-          // Remove the target after the "hit" animation
+          // Remove the target shortly after being tapped
           setTimeout(() => {
             if (target.parentElement) {
               target.parentElement.removeChild(target);
@@ -283,12 +296,12 @@
       
       gameArea.appendChild(target);
       
-      // Automatically remove the target after its lifetime expires
+      // Remove the target after its drop animation completes
       setTimeout(() => {
         if (target.parentElement) {
           target.parentElement.removeChild(target);
         }
-      }, targetLifetime);
+      }, dropDuration * 1000);
     }
     
     // ------------------------------
@@ -301,7 +314,7 @@
         if (timeLeft <= 0) {
           clearInterval(gameTimer);
           clearInterval(spawnInterval);
-          // When time is up, if the score meets the threshold, show level complete screen; otherwise, end game.
+          // When time is up, if score meets threshold, show level complete; else, end game.
           if (score >= getScoreThreshold(level)) {
             endLevel();
           } else {
@@ -319,12 +332,12 @@
       // Clear any remaining targets
       gameArea.innerHTML = '';
       
-      // Update the level complete screen's title and score display
+      // Update level complete screen details
       levelCompleteTitle.textContent = "Level " + level + " Complete!";
       levelScoreDisplay.textContent = score;
       nextLevelButton.textContent = "Start Level " + (level + 1);
       
-      // Hide the game screen and show the level complete screen
+      // Hide game screen and show level complete screen
       gameScreen.style.display = 'none';
       levelCompleteScreen.style.display = 'flex';
     }
@@ -333,17 +346,17 @@
     // Start Next Level
     // ------------------------------
     function startNextLevel() {
-      // Increment level and reset timer
       level++;
       timeLeft = 30;
       updateHUD();
       
-      // Hide the level complete screen and show the game screen
       levelCompleteScreen.style.display = 'none';
       gameScreen.style.display = 'block';
       
       gameRunning = true;
-      spawnInterval = setInterval(spawnTarget, baseSpawnInterval);
+      // Adjust spawn interval based on level (decrease interval for higher levels, min 500ms)
+      let currentSpawnInterval = Math.max(500, baseSpawnInterval - (level - 1) * 100);
+      spawnInterval = setInterval(spawnTarget, currentSpawnInterval);
       startTimer();
     }
     
@@ -356,11 +369,11 @@
       clearInterval(spawnInterval);
       gameArea.innerHTML = '';
       
-      // Pause the background music
+      // Pause and reset background music
       bgMusic.pause();
       bgMusic.currentTime = 0;
       
-      // Retrieve and update high score using localStorage
+      // Update high score using localStorage
       let storedHighScore = localStorage.getItem('highScore') || 0;
       if (score > storedHighScore) {
         localStorage.setItem('highScore', score);
@@ -372,7 +385,7 @@
       finalLevelText.textContent = "Level Reached: " + level;
       highScoreText.textContent = "High Score: " + storedHighScore;
       
-      // Transition to the Game Over screen
+      // Show Game Over screen
       gameScreen.style.display = 'none';
       levelCompleteScreen.style.display = 'none';
       startScreen.style.display = 'none';
@@ -383,24 +396,23 @@
     // Game Start & Restart Functions
     // ------------------------------
     function startGame() {
-      // Initialize game variables for Level 1
       score = 0;
       timeLeft = 30;
       level = 1;
       updateHUD();
       
-      // Hide other screens and show the Game Screen
       startScreen.style.display = 'none';
       levelCompleteScreen.style.display = 'none';
       gameOverScreen.style.display = 'none';
       gameScreen.style.display = 'block';
       
-      // Start the background music
+      // Start background music
       bgMusic.currentTime = 0;
       bgMusic.play();
       
       gameRunning = true;
-      spawnInterval = setInterval(spawnTarget, baseSpawnInterval);
+      let currentSpawnInterval = Math.max(500, baseSpawnInterval - (level - 1) * 100);
+      spawnInterval = setInterval(spawnTarget, currentSpawnInterval);
       startTimer();
     }
     
