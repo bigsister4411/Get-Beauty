@@ -156,11 +156,10 @@
     // Background colors for levels (Option 1: Cool-to-Warm Gradient)
     const levelColors = ['#e0f7fa', '#ffe0e0', '#f3e5f5', '#e0f2f1', '#fffde7'];
     
-    // Function to update the game screen's background color based on level.
+    // Update the game screen's background color based on level (looping)
     function updateBackgroundColor() {
-      // Use the color for the current level if defined; otherwise, use the last color.
-      let bgColor = levelColors[level - 1] || levelColors[levelColors.length - 1];
-      gameScreen.style.backgroundColor = bgColor;
+      let colorIndex = (level - 1) % levelColors.length;
+      gameScreen.style.backgroundColor = levelColors[colorIndex];
     }
     
     // ------------------------------
@@ -253,8 +252,8 @@
       
       let size;
       if (isPositive) {
-        // Positive targets: random size between 50% and 120% of baseSize
-        let scale = 0.5 + Math.random() * 0.7;
+        // Positive targets: random size between 80% and 120% of baseSize
+        let scale = 0.8 + Math.random() * 0.4;
         size = baseSize * scale;
       } else {
         // Negative targets: fixed at 120% of baseSize
