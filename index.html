@@ -90,7 +90,7 @@
       cursor: pointer;
     }
     
-    /* Keyframe animation for dropping targets */
+    /* (Optional) Keyframe animation (not used in random appearance) */
     @keyframes drop {
       from { top: 0; }
       to { top: 100%; }
@@ -104,7 +104,7 @@
     <div id="instructions">
       <p>Tap the "Beauty" to gain +100 points.</p>
       <p>Avoid the "Evildoer" to prevent -100 points.</p>
-      <p>Reach the score target before time runs out to advance.</p>
+      <p>Reach 1000 points before time runs out to advance.</p>
     </div>
     <button id="start-button">Start Game</button>
   </div>
@@ -114,7 +114,7 @@
     <h2 id="level-complete-title">Level Complete!</h2>
     <p>Your Score: <span id="level-score"></span></p>
     <p>Press the button below to start the next level.</p>
-    <button id="next-level-button">Start Level 2</button>
+    <button id="next-level-button">Start Next Level</button>
   </div>
   
   <!-- Game Screen -->
@@ -152,11 +152,18 @@
     // Base parameters
     const baseSpawnInterval = 1500; // in milliseconds; will decrease with level
     const baseSize = 80;            // base target size in pixels
+    const targetLifetime = 2000;    // target lifetime in milliseconds
+    
+    // Level pass threshold: each level requires an additional 1000 points.
+    // Since score is cumulative, Level 1: 1000, Level 2: 2000, etc.
+    function getScoreThreshold(lvl) {
+      return 1000 * lvl;
+    }
     
     // Background colors for levels (Option 1: Cool-to-Warm Gradient)
     const levelColors = ['#e0f7fa', '#ffe0e0', '#f3e5f5', '#e0f2f1', '#fffde7'];
     
-    // Update the game screen's background color based on level (looping)
+    // Update the game screen's background color based on level (cycling through colors)
     function updateBackgroundColor() {
       let colorIndex = (level - 1) % levelColors.length;
       gameScreen.style.backgroundColor = levelColors[colorIndex];
@@ -199,14 +206,8 @@
     const restartButton = document.getElementById('restart-button');
     
     // ------------------------------
-    // Level Progression & Thresholds
+    // Update HUD Display
     // ------------------------------
-    function getScoreThreshold(lvl) {
-      // Example: Level 1: 1000, Level 2: 1500, Level 3: 2000, etc.
-      return 1000 + (lvl - 1) * 500;
-    }
-    
-    // Update HUD display
     function updateHUD() {
       hudScore.textContent = "Score: " + score;
       hudTimer.textContent = "Time: " + timeLeft;
@@ -240,32 +241,32 @@
     }
     
     // ------------------------------
-    // Target Spawning & Handling
+    // Target Spawning & Handling (Random Appearance)
     // ------------------------------
     function spawnTarget() {
       if (!gameRunning) return;
       
       // Determine spawn probability for a positive target.
-      // Level 1: 70%, Level 2: 60%, etc. (minimum 30%)
-      let positiveProbability = Math.max(0.3, 0.7 - (level - 1) * 0.1);
+      // Enforce a minimum positive probability of 0.5.
+      let positiveProbability = Math.max(0.5, 0.7 - (level - 1) * 0.1);
       let isPositive = Math.random() < positiveProbability;
       
       let size;
       if (isPositive) {
         // Positive targets: random size between 80% and 120% of baseSize
-        let scale = 0.8 + Math.random() * 0.4;
+        let scale = 0.8 + Math.random() * 0.4; // scale ∈ [0.8, 1.2]
         size = baseSize * scale;
       } else {
         // Negative targets: fixed at 120% of baseSize
         size = baseSize * 1.2;
       }
       
-      // Evenly distribute target horizontally:
+      // Evenly distribute target horizontally and vertically:
       let areaRect = gameArea.getBoundingClientRect();
-      let centerX = Math.random() * (areaRect.width - size) + size / 2;
-      let x = centerX - size / 2;
+      let x = Math.random() * (areaRect.width - size);
+      let y = Math.random() * (areaRect.height - size);
       
-      // Create the target element (starting at the top)
+      // Create the target element
       let target = document.createElement('img');
       let imgSrc = isPositive ? 'assets/positive.png' : 'assets/negative.png';
       target.src = imgSrc;
@@ -273,15 +274,11 @@
       target.style.width = size + 'px';
       target.style.height = size + 'px';
       target.style.left = x + 'px';
-      target.style.top = '0px';
+      target.style.top = y + 'px';
       
-      // Calculate drop duration (faster as level increases; minimum 1.5 seconds)
-      let dropDuration = Math.max(1.5, 3 - (level - 1) * 0.2);
-      target.style.animation = `drop ${dropDuration}s linear forwards`;
-      
-      // Save initial position for the score popup
+      // Save initial position for score popup
       let targetX = x;
-      let targetY = 0;
+      let targetY = y;
       
       // Add tap (click) event listener to the target
       target.addEventListener('click', function() {
@@ -300,6 +297,13 @@
           }
           updateHUD();
           
+          // Check if the cumulative score has reached the level pass threshold
+          if (score >= getScoreThreshold(level)) {
+            clearInterval(gameTimer);
+            clearInterval(spawnInterval);
+            endLevel();
+          }
+          
           // Remove the target shortly after being tapped
           setTimeout(() => {
             if (target.parentElement) {
@@ -311,12 +315,12 @@
       
       gameArea.appendChild(target);
       
-      // Automatically remove the target after its drop animation completes
+      // Automatically remove the target after its lifetime
       setTimeout(() => {
         if (target.parentElement) {
           target.parentElement.removeChild(target);
         }
-      }, dropDuration * 1000);
+      }, targetLifetime);
     }
     
     // ------------------------------
@@ -329,7 +333,7 @@
         if (timeLeft <= 0) {
           clearInterval(gameTimer);
           clearInterval(spawnInterval);
-          // When time is up, if score meets threshold, show level complete; else, end game.
+          // When time is up, check if the cumulative score meets the level pass threshold
           if (score >= getScoreThreshold(level)) {
             endLevel();
           } else {
@@ -350,7 +354,7 @@
       // Update level complete screen details
       levelCompleteTitle.textContent = "Level " + level + " Complete!";
       levelScoreDisplay.textContent = score;
-      nextLevelButton.textContent = "Start Level " + (level + 1);
+      nextLevelButton.textContent = "Start Next Level";
       
       // Hide game screen and show level complete screen
       gameScreen.style.display = 'none';
@@ -365,7 +369,7 @@
       timeLeft = 30;
       updateHUD();
       
-      // Update the background color for the new level
+      // Update the background color for the new level (cycling through the gradient)
       updateBackgroundColor();
       
       levelCompleteScreen.style.display = 'none';
