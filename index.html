@@ -27,7 +27,7 @@
       width: 100%;
       height: 100vh;
       overflow: hidden;
-      background-color: #e0f7fa;
+      /* Background color will be set dynamically based on level */
     }
     
     /* HUD styling */
@@ -153,6 +153,16 @@
     const baseSpawnInterval = 1500; // in milliseconds; will decrease with level
     const baseSize = 80;            // base target size in pixels
     
+    // Background colors for levels (Option 1: Cool-to-Warm Gradient)
+    const levelColors = ['#e0f7fa', '#ffe0e0', '#f3e5f5', '#e0f2f1', '#fffde7'];
+    
+    // Function to update the game screen's background color based on level.
+    function updateBackgroundColor() {
+      // Use the color for the current level if defined; otherwise, use the last color.
+      let bgColor = levelColors[level - 1] || levelColors[levelColors.length - 1];
+      gameScreen.style.backgroundColor = bgColor;
+    }
+    
     // ------------------------------
     // Sound Effects
     // ------------------------------
@@ -241,16 +251,22 @@
       let positiveProbability = Math.max(0.3, 0.7 - (level - 1) * 0.1);
       let isPositive = Math.random() < positiveProbability;
       
-      // Randomize target size: scale factor between 0.5 and 1.2 of the base size
-      let scale = 0.5 + Math.random() * 0.7; 
-      let size = baseSize * scale;
+      let size;
+      if (isPositive) {
+        // Positive targets: random size between 50% and 120% of baseSize
+        let scale = 0.5 + Math.random() * 0.7;
+        size = baseSize * scale;
+      } else {
+        // Negative targets: fixed at 120% of baseSize
+        size = baseSize * 1.2;
+      }
       
-      // Evenly distribute target across the width:
+      // Evenly distribute target horizontally:
       let areaRect = gameArea.getBoundingClientRect();
       let centerX = Math.random() * (areaRect.width - size) + size / 2;
       let x = centerX - size / 2;
       
-      // Create the target element (starts at the top)
+      // Create the target element (starting at the top)
       let target = document.createElement('img');
       let imgSrc = isPositive ? 'assets/positive.png' : 'assets/negative.png';
       target.src = imgSrc;
@@ -258,7 +274,7 @@
       target.style.width = size + 'px';
       target.style.height = size + 'px';
       target.style.left = x + 'px';
-      target.style.top = '0px'; // start at the top
+      target.style.top = '0px';
       
       // Calculate drop duration (faster as level increases; minimum 1.5 seconds)
       let dropDuration = Math.max(1.5, 3 - (level - 1) * 0.2);
@@ -296,7 +312,7 @@
       
       gameArea.appendChild(target);
       
-      // Remove the target after its drop animation completes
+      // Automatically remove the target after its drop animation completes
       setTimeout(() => {
         if (target.parentElement) {
           target.parentElement.removeChild(target);
@@ -350,11 +366,14 @@
       timeLeft = 30;
       updateHUD();
       
+      // Update the background color for the new level
+      updateBackgroundColor();
+      
       levelCompleteScreen.style.display = 'none';
       gameScreen.style.display = 'block';
       
       gameRunning = true;
-      // Adjust spawn interval based on level (decrease interval for higher levels, min 500ms)
+      // Adjust spawn interval based on level (faster spawns for higher levels, minimum 500ms)
       let currentSpawnInterval = Math.max(500, baseSpawnInterval - (level - 1) * 100);
       spawnInterval = setInterval(spawnTarget, currentSpawnInterval);
       startTimer();
@@ -400,6 +419,9 @@
       timeLeft = 30;
       level = 1;
       updateHUD();
+      
+      // Set initial background color for level 1
+      updateBackgroundColor();
       
       startScreen.style.display = 'none';
       levelCompleteScreen.style.display = 'none';
