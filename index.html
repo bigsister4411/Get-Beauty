@@ -188,7 +188,7 @@
     }
     
     // ------------------------------
-    // Calculate Spawn Interval Based on Level (Doubling occurrence frequency)
+    // Calculate Spawn Interval Based on Level (Lower interval for level 5+)
     // ------------------------------
     function getSpawnInterval(lvl) {
       if (lvl <= 4) {
@@ -196,10 +196,11 @@
         if (lvl === 2) return 1200 / 2;  // 600 ms
         if (lvl === 3) return 1100 / 2;  // 550 ms
         if (lvl === 4) return 1000 / 2;  // 500 ms
-      } else if (lvl <= 6) {
-        return Math.max(500, (1500 - (lvl - 1) * 150) / 2);
       } else {
-        return Math.max(500, (1500 - 750 - (lvl - 6) * 100) / 2);
+        // For level 5 and above, decrease the interval by 50 ms per level from level 5,
+        // with a minimum spawn interval of 300 ms.
+        let interval = 500 - (lvl - 4) * 50;
+        return Math.max(300, interval);
       }
     }
     
@@ -280,11 +281,7 @@
     function spawnObject() {
       if (!gameRunning) return;
       
-      // Determine what to spawn:
-      // Using the desired probabilities:
-      // Normal targets: 67%
-      // Flower tool: 16.5%
-      // Knife tool: 16.5%
+      // Adjusted probabilities: Normal targets: 67%, Flower tool: 16.5%, Knife tool: 16.5%.
       let r = Math.random();
       if (r < 0.67) {
         // Spawn normal target.
