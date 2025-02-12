@@ -8,7 +8,7 @@
     /* Reset and basic styles */
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: sans-serif; background-color: #f0f0f0; }
-
+    
     /* Common screen styles */
     .screen {
       display: flex;
@@ -27,7 +27,7 @@
       width: 100%;
       height: 100vh;
       overflow: hidden;
-      /* Background color will be set dynamically */
+      /* Background color is set dynamically */
     }
     
     /* HUD styling */
@@ -54,18 +54,17 @@
       cursor: pointer;
     }
     
-    /* Game Area for targets */
+    /* Game Area for objects */
     #game-area {
       position: relative;
       width: 100%;
       height: 100%;
     }
     
-    /* Target styling */
+    /* Target/tool styling */
     .target {
       position: absolute;
       cursor: pointer;
-      /* Width and height will be set dynamically */
       transition: transform 0.2s ease-out, opacity 0.2s ease-out;
     }
     .hit {
@@ -90,7 +89,7 @@
       cursor: pointer;
     }
     
-    /* Gift container styling on the Level Complete Screen */
+    /* Gift container styling on Level Complete Screen */
     #gift-container {
       margin-top: 20px;
       display: none;
@@ -104,7 +103,7 @@
       height: auto;
     }
     
-    /* (Optional) Keyframe animation for dropping targets (not used now) */
+    /* (Optional) Keyframe animation (not used in random appearance) */
     @keyframes drop {
       from { top: 0; }
       to { top: 100%; }
@@ -117,17 +116,19 @@
     <h1>Beauty vs Evildoer</h1>
     <div id="instructions">
       <p>Tap the "Beauty" to gain +100 points.</p>
-      <p>Avoid the "Evildoer" to prevent -100 points.</p>
+      <p>Avoid the "Evildoer" to lose 100 points.</p>
+      <p>Tap the Flower tool to gain +10 points.</p>
+      <p>Tap the Knife tool to lose 10 points.</p>
       <p>Reach 1000 points before time runs out to advance.</p>
     </div>
     <button id="start-button">Start Game</button>
   </div>
   
-  <!-- Level Complete Screen (Instruction Page) -->
+  <!-- Level Complete Screen (Instruction/Gift Page) -->
   <div id="level-complete-screen" class="screen" style="display: none;">
     <h2 id="level-complete-title">Level Complete!</h2>
     <p>Your Score: <span id="level-score"></span></p>
-    <!-- Gift container: shown if level is a multiple of 10 -->
+    <!-- Gift container: shown if level is a multiple of 5 -->
     <div id="gift-container">
       <p>You get a lovely Gift for level up</p>
       <img id="gift-image" src="" alt="Gift">
@@ -143,7 +144,6 @@
       <span id="timer">Time: 30</span>
       <span id="level">Level: 1</span>
     </div>
-    <!-- Stop Game Button -->
     <button id="stop-button">Stop Game</button>
     <div id="game-area"></div>
   </div>
@@ -165,15 +165,15 @@
     let timeLeft = 30;         // 30 seconds per level
     let level = 1;
     let gameTimer;             // Countdown timer
-    let spawnInterval;         // For spawning targets
+    let spawnInterval;         // For spawning objects
     let gameRunning = false;
     
     // Base parameters
     const baseSpawnInterval = 1500; // Base spawn interval in ms
     const baseSize = 80;            // Base target size in pixels
-    const targetLifetime = 2000;    // Target lifetime in ms
+    const targetLifetime = 2000;    // Lifetime of each object in ms
     
-    // Level pass threshold: Each level requires 1000 points to pass (cumulative).
+    // Level pass threshold: Each level requires 1000 * level points (cumulative).
     function getScoreThreshold(lvl) {
       return 1000 * lvl;
     }
@@ -188,13 +188,18 @@
     }
     
     // ------------------------------
-    // Calculate Spawn Interval Based on Level
+    // Calculate Spawn Interval Based on Level (Doubling occurrence frequency)
     // ------------------------------
     function getSpawnInterval(lvl) {
-      if (lvl <= 6) {
-        return Math.max(500, 1500 - (lvl - 1) * 150); // e.g., Level 1: 1500ms, L2: 1350ms, L3: 1200ms, L4: 1050ms, L5: 900ms, L6: 750ms.
+      if (lvl <= 4) {
+        if (lvl === 1) return 1300 / 2;  // 650 ms
+        if (lvl === 2) return 1200 / 2;  // 600 ms
+        if (lvl === 3) return 1100 / 2;  // 550 ms
+        if (lvl === 4) return 1000 / 2;  // 500 ms
+      } else if (lvl <= 6) {
+        return Math.max(500, (1500 - (lvl - 1) * 150) / 2);
       } else {
-        return Math.max(500, 1500 - 750 - (lvl - 6) * 100); // For levels above 6.
+        return Math.max(500, (1500 - 750 - (lvl - 6) * 100) / 2);
       }
     }
     
@@ -246,7 +251,7 @@
     }
     
     // ------------------------------
-    // Show Score Popup (for +100 / -100)
+    // Show Score Popup (for points and tool effects)
     // ------------------------------
     function showScorePopup(x, y, text, color) {
       const popup = document.createElement('div');
@@ -270,79 +275,155 @@
     }
     
     // ------------------------------
-    // Target Spawning & Handling (Random Appearance)
+    // Spawn Objects (Targets and Tools)
     // ------------------------------
-    function spawnTarget() {
+    function spawnObject() {
       if (!gameRunning) return;
       
-      // Determine positive target probability.
-      let positiveProbability = Math.max(0.6, 0.8 - (level - 1) * 0.1);
-      let isPositive = Math.random() < positiveProbability;
-      
-      let size;
-      if (isPositive) {
-        // Positive targets: random size between 80% and 120% of baseSize
-        let scale = 0.8 + Math.random() * 0.4;
-        size = baseSize * scale;
-      } else {
-        // Negative targets: fixed at 120% of baseSize
-        size = baseSize * 1.2;
-      }
-      
-      let areaRect = gameArea.getBoundingClientRect();
-      let x = Math.random() * (areaRect.width - size);
-      let y = Math.random() * (areaRect.height - size);
-      
-      let target = document.createElement('img');
-      let imgSrc = isPositive ? 'assets/positive.png' : 'assets/negative.png';
-      target.src = imgSrc;
-      target.classList.add('target');
-      target.style.width = size + 'px';
-      target.style.height = size + 'px';
-      target.style.left = x + 'px';
-      target.style.top = y + 'px';
-      
-      let targetX = x;
-      let targetY = y;
-      
-      target.addEventListener('click', function() {
-        if (!target.classList.contains('hit')) {
-          target.classList.add('hit');
-          if (isPositive) {
-            score += 100;
-            positiveSound.currentTime = 0;
-            positiveSound.play();
-            showScorePopup(targetX, targetY, "+100", "green");
-          } else {
-            score -= 100;
-            negativeSound.currentTime = 0;
-            negativeSound.play();
-            showScorePopup(targetX, targetY, "-100", "red");
-          }
-          updateHUD();
-          
-          // Check if cumulative score has reached threshold
-          if (score >= getScoreThreshold(level)) {
-            clearInterval(gameTimer);
-            clearInterval(spawnInterval);
-            endLevel();
-          }
-          
-          setTimeout(() => {
-            if (target.parentElement) {
-              target.parentElement.removeChild(target);
+      // Determine what to spawn:
+      // Using the desired probabilities:
+      // Normal targets: 67%
+      // Flower tool: 16.5%
+      // Knife tool: 16.5%
+      let r = Math.random();
+      if (r < 0.67) {
+        // Spawn normal target.
+        let positiveProbability = Math.max(0.6, 0.8 - (level - 1) * 0.1);
+        let isPositive = Math.random() < positiveProbability;
+        
+        let size;
+        if (isPositive) {
+          let scale = 0.8 + Math.random() * 0.4;
+          size = baseSize * scale;
+        } else {
+          size = baseSize * 1.2;
+        }
+        
+        let areaRect = gameArea.getBoundingClientRect();
+        let x = Math.random() * (areaRect.width - size);
+        let y = Math.random() * (areaRect.height - size);
+        
+        let target = document.createElement('img');
+        let imgSrc = isPositive ? 'assets/positive.png' : 'assets/negative.png';
+        target.src = imgSrc;
+        target.classList.add('target');
+        target.style.width = size + 'px';
+        target.style.height = size + 'px';
+        target.style.left = x + 'px';
+        target.style.top = y + 'px';
+        
+        let targetX = x;
+        let targetY = y;
+        
+        target.addEventListener('click', function() {
+          if (!target.classList.contains('hit')) {
+            target.classList.add('hit');
+            if (isPositive) {
+              score += 100;
+              positiveSound.currentTime = 0;
+              positiveSound.play();
+              showScorePopup(targetX, targetY, "+100", "green");
+            } else {
+              score -= 100;
+              negativeSound.currentTime = 0;
+              negativeSound.play();
+              showScorePopup(targetX, targetY, "-100", "red");
             }
-          }, 200);
-        }
-      });
-      
-      gameArea.appendChild(target);
-      
-      setTimeout(() => {
-        if (target.parentElement) {
-          target.parentElement.removeChild(target);
-        }
-      }, targetLifetime);
+            updateHUD();
+            if (score >= getScoreThreshold(level)) {
+              clearInterval(gameTimer);
+              clearInterval(spawnInterval);
+              endLevel();
+            }
+            setTimeout(() => {
+              if (target.parentElement) {
+                target.parentElement.removeChild(target);
+              }
+            }, 200);
+          }
+        });
+        
+        gameArea.appendChild(target);
+        setTimeout(() => {
+          if (target.parentElement) {
+            target.parentElement.removeChild(target);
+          }
+        }, targetLifetime);
+        
+      } else if (r < 0.67 + 0.165) {
+        // Spawn Flower tool: +10 points, fixed size 65% of baseSize.
+        let size = baseSize * 0.65;
+        let areaRect = gameArea.getBoundingClientRect();
+        let x = Math.random() * (areaRect.width - size);
+        let y = Math.random() * (areaRect.height - size);
+        
+        let tool = document.createElement('img');
+        tool.src = 'assets/flower.png';
+        tool.classList.add('target');
+        tool.style.width = size + 'px';
+        tool.style.height = size + 'px';
+        tool.style.left = x + 'px';
+        tool.style.top = y + 'px';
+        
+        tool.addEventListener('click', function() {
+          if (!tool.classList.contains('hit')) {
+            tool.classList.add('hit');
+            score += 10;
+            // No sound effect for tool taps.
+            showScorePopup(x, y, "+10", "green");
+            updateHUD();
+            setTimeout(() => {
+              if (tool.parentElement) {
+                tool.parentElement.removeChild(tool);
+              }
+            }, 200);
+          }
+        });
+        
+        gameArea.appendChild(tool);
+        setTimeout(() => {
+          if (tool.parentElement) {
+            tool.parentElement.removeChild(tool);
+          }
+        }, targetLifetime);
+        
+      } else {
+        // Spawn Knife tool: -10 points, fixed size 65% of baseSize.
+        let size = baseSize * 0.65;
+        let areaRect = gameArea.getBoundingClientRect();
+        let x = Math.random() * (areaRect.width - size);
+        let y = Math.random() * (areaRect.height - size);
+        
+        let tool = document.createElement('img');
+        tool.src = 'assets/knife.png';
+        tool.classList.add('target');
+        tool.style.width = size + 'px';
+        tool.style.height = size + 'px';
+        tool.style.left = x + 'px';
+        tool.style.top = y + 'px';
+        
+        tool.addEventListener('click', function() {
+          if (!tool.classList.contains('hit')) {
+            tool.classList.add('hit');
+            score -= 10;
+            // No sound effect for tool taps.
+            showScorePopup(x, y, "-10", "red");
+            updateHUD();
+            setTimeout(() => {
+              if (tool.parentElement) {
+                tool.parentElement.removeChild(tool);
+              }
+            }, 200);
+          }
+        });
+        
+        gameArea.appendChild(tool);
+        setTimeout(() => {
+          if (tool.parentElement) {
+            tool.parentElement.removeChild(tool);
+          }
+        }, targetLifetime);
+      }
     }
     
     // ------------------------------
@@ -374,11 +455,10 @@
       levelCompleteTitle.textContent = "Level " + level + " Complete!";
       levelScoreDisplay.textContent = score;
       
-      // Show gift if level is a multiple of 10
-      if (level % 10 === 0) {
+      // Show gift if the level is a multiple of 5.
+      if (level % 5 === 0) {
         giftContainer.style.display = 'block';
-        // If level is divisible by 20, show puppy; otherwise, show cat.
-        if (level % 20 === 0) {
+        if (level % 10 === 0) {
           giftImage.src = 'assets/puppy.png';
         } else {
           giftImage.src = 'assets/cat.png';
@@ -406,7 +486,7 @@
       
       gameRunning = true;
       let currentSpawnInterval = getSpawnInterval(level);
-      spawnInterval = setInterval(spawnTarget, currentSpawnInterval);
+      spawnInterval = setInterval(spawnObject, currentSpawnInterval);
       startTimer();
     }
     
@@ -461,7 +541,7 @@
       
       gameRunning = true;
       let currentSpawnInterval = getSpawnInterval(level);
-      spawnInterval = setInterval(spawnTarget, currentSpawnInterval);
+      spawnInterval = setInterval(spawnObject, currentSpawnInterval);
       startTimer();
     }
     
