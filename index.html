@@ -27,7 +27,7 @@
       width: 100%;
       height: 100vh;
       overflow: hidden;
-      /* Background color will be set dynamically based on level */
+      /* Background color will be set dynamically */
     }
     
     /* HUD styling */
@@ -90,7 +90,21 @@
       cursor: pointer;
     }
     
-    /* (Optional) Keyframe animation (not used in random appearance) */
+    /* Gift container styling on the Level Complete Screen */
+    #gift-container {
+      margin-top: 20px;
+      display: none;
+    }
+    #gift-container p {
+      font-size: 1.2em;
+      margin-bottom: 10px;
+    }
+    #gift-container img {
+      max-width: 50%;
+      height: auto;
+    }
+    
+    /* (Optional) Keyframe animation for dropping targets (not used now) */
     @keyframes drop {
       from { top: 0; }
       to { top: 100%; }
@@ -109,10 +123,15 @@
     <button id="start-button">Start Game</button>
   </div>
   
-  <!-- Level Complete Screen (shown between levels) -->
+  <!-- Level Complete Screen (Instruction Page) -->
   <div id="level-complete-screen" class="screen" style="display: none;">
     <h2 id="level-complete-title">Level Complete!</h2>
     <p>Your Score: <span id="level-score"></span></p>
+    <!-- Gift container: shown if level is a multiple of 10 -->
+    <div id="gift-container">
+      <p>You get a lovely Gift for level up</p>
+      <img id="gift-image" src="" alt="Gift">
+    </div>
     <p>Press the button below to start the next level.</p>
     <button id="next-level-button">Start Next Level</button>
   </div>
@@ -150,12 +169,11 @@
     let gameRunning = false;
     
     // Base parameters
-    const baseSpawnInterval = 1500; // in milliseconds; will decrease with level
-    const baseSize = 80;            // base target size in pixels
-    const targetLifetime = 2000;    // target lifetime in milliseconds
+    const baseSpawnInterval = 1500; // Base spawn interval in ms
+    const baseSize = 80;            // Base target size in pixels
+    const targetLifetime = 2000;    // Target lifetime in ms
     
-    // Level pass threshold: each level requires an additional 1000 points.
-    // Since score is cumulative, Level 1: 1000, Level 2: 2000, etc.
+    // Level pass threshold: Each level requires 1000 points to pass (cumulative).
     function getScoreThreshold(lvl) {
       return 1000 * lvl;
     }
@@ -167,6 +185,17 @@
     function updateBackgroundColor() {
       let colorIndex = (level - 1) % levelColors.length;
       gameScreen.style.backgroundColor = levelColors[colorIndex];
+    }
+    
+    // ------------------------------
+    // Calculate Spawn Interval Based on Level
+    // ------------------------------
+    function getSpawnInterval(lvl) {
+      if (lvl <= 6) {
+        return Math.max(500, 1500 - (lvl - 1) * 150); // e.g., Level 1: 1500ms, L2: 1350ms, L3: 1200ms, L4: 1050ms, L5: 900ms, L6: 750ms.
+      } else {
+        return Math.max(500, 1500 - 750 - (lvl - 6) * 100); // For levels above 6.
+      }
     }
     
     // ------------------------------
@@ -199,6 +228,8 @@
     const levelCompleteTitle = document.getElementById('level-complete-title');
     const levelScoreDisplay = document.getElementById('level-score');
     const nextLevelButton = document.getElementById('next-level-button');
+    const giftContainer = document.getElementById('gift-container');
+    const giftImage = document.getElementById('gift-image');
     const gameOverScreen = document.getElementById('game-over-screen');
     const finalScoreText = document.getElementById('final-score');
     const finalLevelText = document.getElementById('final-level');
@@ -226,13 +257,11 @@
       popup.style.color = color;
       gameArea.appendChild(popup);
       
-      // Animate the popup (move up and fade out)
       setTimeout(() => {
         popup.style.transform = 'translateY(-30px)';
         popup.style.opacity = 0;
       }, 10);
       
-      // Remove the popup after the animation completes
       setTimeout(() => {
         if (popup.parentElement) {
           popup.parentElement.removeChild(popup);
@@ -246,27 +275,24 @@
     function spawnTarget() {
       if (!gameRunning) return;
       
-      // Determine spawn probability for a positive target.
-      // Enforce a minimum positive probability of 0.5.
-      let positiveProbability = Math.max(0.5, 0.7 - (level - 1) * 0.1);
+      // Determine positive target probability.
+      let positiveProbability = Math.max(0.6, 0.8 - (level - 1) * 0.1);
       let isPositive = Math.random() < positiveProbability;
       
       let size;
       if (isPositive) {
         // Positive targets: random size between 80% and 120% of baseSize
-        let scale = 0.8 + Math.random() * 0.4; // scale ∈ [0.8, 1.2]
+        let scale = 0.8 + Math.random() * 0.4;
         size = baseSize * scale;
       } else {
         // Negative targets: fixed at 120% of baseSize
         size = baseSize * 1.2;
       }
       
-      // Evenly distribute target horizontally and vertically:
       let areaRect = gameArea.getBoundingClientRect();
       let x = Math.random() * (areaRect.width - size);
       let y = Math.random() * (areaRect.height - size);
       
-      // Create the target element
       let target = document.createElement('img');
       let imgSrc = isPositive ? 'assets/positive.png' : 'assets/negative.png';
       target.src = imgSrc;
@@ -276,11 +302,9 @@
       target.style.left = x + 'px';
       target.style.top = y + 'px';
       
-      // Save initial position for score popup
       let targetX = x;
       let targetY = y;
       
-      // Add tap (click) event listener to the target
       target.addEventListener('click', function() {
         if (!target.classList.contains('hit')) {
           target.classList.add('hit');
@@ -297,14 +321,13 @@
           }
           updateHUD();
           
-          // Check if the cumulative score has reached the level pass threshold
+          // Check if cumulative score has reached threshold
           if (score >= getScoreThreshold(level)) {
             clearInterval(gameTimer);
             clearInterval(spawnInterval);
             endLevel();
           }
           
-          // Remove the target shortly after being tapped
           setTimeout(() => {
             if (target.parentElement) {
               target.parentElement.removeChild(target);
@@ -315,7 +338,6 @@
       
       gameArea.appendChild(target);
       
-      // Automatically remove the target after its lifetime
       setTimeout(() => {
         if (target.parentElement) {
           target.parentElement.removeChild(target);
@@ -333,7 +355,6 @@
         if (timeLeft <= 0) {
           clearInterval(gameTimer);
           clearInterval(spawnInterval);
-          // When time is up, check if the cumulative score meets the level pass threshold
           if (score >= getScoreThreshold(level)) {
             endLevel();
           } else {
@@ -344,19 +365,28 @@
     }
     
     // ------------------------------
-    // End Current Level: Show Level Complete Screen
+    // End Level: Show Level Complete Screen (with Gift if applicable)
     // ------------------------------
     function endLevel() {
       gameRunning = false;
-      // Clear any remaining targets
       gameArea.innerHTML = '';
       
-      // Update level complete screen details
       levelCompleteTitle.textContent = "Level " + level + " Complete!";
       levelScoreDisplay.textContent = score;
-      nextLevelButton.textContent = "Start Next Level";
       
-      // Hide game screen and show level complete screen
+      // Show gift if level is a multiple of 10
+      if (level % 10 === 0) {
+        giftContainer.style.display = 'block';
+        // If level is divisible by 20, show puppy; otherwise, show cat.
+        if (level % 20 === 0) {
+          giftImage.src = 'assets/puppy.png';
+        } else {
+          giftImage.src = 'assets/cat.png';
+        }
+      } else {
+        giftContainer.style.display = 'none';
+      }
+      
       gameScreen.style.display = 'none';
       levelCompleteScreen.style.display = 'flex';
     }
@@ -368,16 +398,14 @@
       level++;
       timeLeft = 30;
       updateHUD();
-      
-      // Update the background color for the new level (cycling through the gradient)
       updateBackgroundColor();
       
       levelCompleteScreen.style.display = 'none';
+      giftContainer.style.display = 'none';
       gameScreen.style.display = 'block';
       
       gameRunning = true;
-      // Adjust spawn interval based on level (faster spawns for higher levels, minimum 500ms)
-      let currentSpawnInterval = Math.max(500, baseSpawnInterval - (level - 1) * 100);
+      let currentSpawnInterval = getSpawnInterval(level);
       spawnInterval = setInterval(spawnTarget, currentSpawnInterval);
       startTimer();
     }
@@ -391,25 +419,22 @@
       clearInterval(spawnInterval);
       gameArea.innerHTML = '';
       
-      // Pause and reset background music
       bgMusic.pause();
       bgMusic.currentTime = 0;
       
-      // Update high score using localStorage
       let storedHighScore = localStorage.getItem('highScore') || 0;
       if (score > storedHighScore) {
         localStorage.setItem('highScore', score);
         storedHighScore = score;
       }
       
-      // Display final score, level reached, and high score on the Game Over screen
       finalScoreText.textContent = "Final Score: " + score;
       finalLevelText.textContent = "Level Reached: " + level;
       highScoreText.textContent = "High Score: " + storedHighScore;
       
-      // Show Game Over screen
       gameScreen.style.display = 'none';
       levelCompleteScreen.style.display = 'none';
+      giftContainer.style.display = 'none';
       startScreen.style.display = 'none';
       gameOverScreen.style.display = 'flex';
     }
@@ -423,20 +448,19 @@
       level = 1;
       updateHUD();
       
-      // Set initial background color for level 1
       updateBackgroundColor();
       
       startScreen.style.display = 'none';
       levelCompleteScreen.style.display = 'none';
+      giftContainer.style.display = 'none';
       gameOverScreen.style.display = 'none';
       gameScreen.style.display = 'block';
       
-      // Start background music
       bgMusic.currentTime = 0;
       bgMusic.play();
       
       gameRunning = true;
-      let currentSpawnInterval = Math.max(500, baseSpawnInterval - (level - 1) * 100);
+      let currentSpawnInterval = getSpawnInterval(level);
       spawnInterval = setInterval(spawnTarget, currentSpawnInterval);
       startTimer();
     }
