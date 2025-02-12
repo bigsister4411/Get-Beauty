@@ -27,7 +27,7 @@
       width: 100%;
       height: 100vh;
       overflow: hidden;
-      /* Background color is set dynamically */
+      /* Background color will be set dynamically */
     }
     
     /* HUD styling */
@@ -169,26 +169,27 @@
     let gameRunning = false;
     
     // Base parameters
-    const baseSpawnInterval = 1500; // Base spawn interval in ms
+    const baseSpawnInterval = 1500; // Base spawn interval (for formula)
     const baseSize = 80;            // Base target size in pixels
-    const targetLifetime = 2000;    // Lifetime of each object in ms
+    const targetLifetime = 2000;    // Lifetime (ms) of each spawned object
     
-    // Level pass threshold: Each level requires 1000 * level points (cumulative).
+    // Level pass threshold: Each level requires 1000 * level cumulative points.
     function getScoreThreshold(lvl) {
       return 1000 * lvl;
     }
     
-    // Background colors for levels (Option 1: Cool-to-Warm Gradient)
+    // Background colors for levels (Cool-to-Warm Gradient)
     const levelColors = ['#e0f7fa', '#ffe0e0', '#f3e5f5', '#e0f2f1', '#fffde7'];
     
-    // Update the game screen's background color based on level (cycling through colors)
+    // Update game screen background color based on level
     function updateBackgroundColor() {
       let colorIndex = (level - 1) % levelColors.length;
       gameScreen.style.backgroundColor = levelColors[colorIndex];
     }
     
     // ------------------------------
-    // Calculate Spawn Interval Based on Level (Lower interval for level 5+)
+    // Calculate Spawn Interval Based on Level
+    // For levels 1-4, use fixed speeds; for levels 5+, decrease by 50ms per level (min 300ms)
     // ------------------------------
     function getSpawnInterval(lvl) {
       if (lvl <= 4) {
@@ -197,27 +198,34 @@
         if (lvl === 3) return 1100 / 2;  // 550 ms
         if (lvl === 4) return 1000 / 2;  // 500 ms
       } else {
-        // For level 5 and above, decrease the interval by 50 ms per level from level 5,
-        // with a minimum spawn interval of 300 ms.
-        let interval = 500 - (lvl - 4) * 50;
-        return Math.max(300, interval);
+        let interval = 500 - (lvl - 4) * 50; // Decrease by 50ms per level starting at level 5
+        return Math.max(300, interval);      // Clamp minimum to 300 ms
       }
     }
     
     // ------------------------------
-    // Sound Effects
+    // Sound Effects (for normal targets only)
     // ------------------------------
-    const positiveSound = new Audio('assets/positive.mp3'); // "Beauty" tap sound
-    const negativeSound = new Audio('assets/negative.mp3'); // "Evildoer" tap sound
+    const positiveSound = new Audio('assets/positive.mp3'); // For normal positive target tap
+    const negativeSound = new Audio('assets/negative.mp3'); // For normal negative target tap
     positiveSound.load();
     negativeSound.load();
     
     // ------------------------------
-    // Background Music
+    // Background Music Handling
     // ------------------------------
     const bgMusic = new Audio('assets/bg_music.mp3');
     bgMusic.loop = true;
     bgMusic.load();
+    
+    function playBackgroundMusic() {
+      bgMusic.currentTime = 0;
+      bgMusic.play();
+    }
+    
+    function pauseBackgroundMusic() {
+      bgMusic.pause();
+    }
     
     // ------------------------------
     // DOM Elements
@@ -281,7 +289,7 @@
     function spawnObject() {
       if (!gameRunning) return;
       
-      // Adjusted probabilities: Normal targets: 67%, Flower tool: 16.5%, Knife tool: 16.5%.
+      // Distribution: Normal targets 67%, Flower tool 16.5%, Knife tool 16.5%.
       let r = Math.random();
       if (r < 0.67) {
         // Spawn normal target.
@@ -455,17 +463,16 @@
       // Show gift if the level is a multiple of 5.
       if (level % 5 === 0) {
         giftContainer.style.display = 'block';
-        if (level % 10 === 0) {
-          giftImage.src = 'assets/puppy.png';
-        } else {
-          giftImage.src = 'assets/cat.png';
-        }
+        giftImage.src = (level % 10 === 0) ? 'assets/puppy.png' : 'assets/cat.png';
       } else {
         giftContainer.style.display = 'none';
       }
       
       gameScreen.style.display = 'none';
       levelCompleteScreen.style.display = 'flex';
+      
+      // Pause background music during level-up screen
+      pauseBackgroundMusic();
     }
     
     // ------------------------------
@@ -485,6 +492,9 @@
       let currentSpawnInterval = getSpawnInterval(level);
       spawnInterval = setInterval(spawnObject, currentSpawnInterval);
       startTimer();
+      
+      // Resume background music when starting next level
+      playBackgroundMusic();
     }
     
     // ------------------------------
@@ -524,7 +534,6 @@
       timeLeft = 30;
       level = 1;
       updateHUD();
-      
       updateBackgroundColor();
       
       startScreen.style.display = 'none';
@@ -533,8 +542,7 @@
       gameOverScreen.style.display = 'none';
       gameScreen.style.display = 'block';
       
-      bgMusic.currentTime = 0;
-      bgMusic.play();
+      playBackgroundMusic();
       
       gameRunning = true;
       let currentSpawnInterval = getSpawnInterval(level);
